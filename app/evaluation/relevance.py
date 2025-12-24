@@ -1,0 +1,14 @@
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
+class RelevanceScorer:
+    def __init__(self):
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    def score(self, prompt: str, output: str) -> float:
+        embeddings = self.model.encode([prompt, output])
+        similarity = cosine_similarity(
+            [embeddings[0]],
+            [embeddings[1]]
+        )[0][0]
+        return float(similarity)

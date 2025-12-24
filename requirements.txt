@@ -1,0 +1,18 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+loguru
+
+# embeddings & similarity
+sentence-transformers
+scikit-learn
+
+# MLOps
+mlflow
+
+# local LLM
+requests
+
+# dev
+pytest
