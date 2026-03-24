@@ -3,15 +3,45 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
+*.egg
 
 # Virtual environment
 .venv/
+venv/
+env/
 
 # MLflow
 mlruns/
+
+# Database
+*.db
+
+# Logs
+logs/
 
 # Environment files
 .env
 
 # OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test
+.pytest_cache/
+htmlcov/
+.coverage
+report.xml
+test_mlruns/
+test_*.db
+
+# Docker
+docker-compose.override.yml

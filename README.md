@@ -1,269 +1,269 @@
-# LLM Monitoring & Evaluation Pipeline (MLOps)
+# LLM Monitoring & Evaluation Pipeline
 
-A **production-grade LLM monitoring and evaluation system** built to detect hallucinations, relevance degradation, and reliability issues in Large Language Model (LLM outputs).
-The system exposes a FastAPI service for LLM inference, evaluates responses using embedding-based metrics and heuristics, and tracks experiments using MLflow to enable regression analysis across model and prompt iterations.
-
----
-
-## 🚀 Key Features
-
-* **LLM Inference API**
-
-  * FastAPI-based REST service
-  * Pluggable LLM backend (open-source Hugging Face models)
-  * Schema-validated request and response contracts
-
-* **Automated LLM Evaluation**
-
-  * Embedding-based relevance scoring (cosine similarity)
-  * Heuristic-based hallucination detection
-  * Structured evaluation results returned with each response
-
-* **MLOps & Monitoring**
-
-  * MLflow experiment tracking (file-based, no external infrastructure)
-  * Logging of prompts, models, metrics, and raw outputs
-  * Regression analysis across prompt and model iterations
-
-* **Production-Oriented Design**
-
-  * Modular architecture
-  * Clear separation of concerns
-  * Easily extensible for new metrics, models, or evaluators
+A **production-grade LLM monitoring and evaluation system** that detects hallucinations, measures semantic relevance, scores toxicity, and tracks quality drift across model iterations — powered by FastAPI, MLflow, Prometheus metrics, and a SQLite-backed history/analytics layer.
 
 ---
 
-## 🧠 Motivation
+## Key Features
 
-In real-world GenAI systems, **LLM outputs cannot be blindly trusted**.
-This project focuses on **detecting failures**, not hiding them.
+### LLM Inference API
+- FastAPI REST service with **versioned API** (`/api/v1/`)
+- Pluggable LLM backend via abstract base class
+- **Single and batch** generation endpoints
+- Request/response schema validation with Pydantic v2
+- Per-request overrides (model, temperature, max length)
 
-Instead of optimizing for “perfect answers”, it:
+### Multi-Dimensional Evaluation Pipeline
+- **Relevance scoring** — Sentence-BERT embeddings + cosine similarity
+- **Hallucination detection** — Multi-signal heuristic engine (prompt echoing, low relevance, repetition detection, suspicious patterns, incoherent structure)
+- **Toxicity scoring** — Pattern-based toxicity analysis with severity weighting
+- **Confidence scoring** — Weighted composite of all evaluation signals
+- Every response includes full evaluation metadata
 
-* Surfaces hallucinations
-* Measures semantic relevance
-* Tracks quality drift over time
+### MLOps & Observability
+- **MLflow experiment tracking** — params, metrics, artifacts per run
+- **Prometheus-compatible `/metrics` endpoint** for Grafana integration
+- **Structured JSON logging** (production) with request ID correlation
+- Log rotation with compression
 
-This mirrors how **production GenAI and MLOps teams** monitor LLM reliability.
+### Production Infrastructure
+- **SQLite database** with full request/response history
+- **Analytics endpoint** — aggregated quality metrics, model breakdowns
+- **Paginated history** with filtering (model, hallucination-only)
+- **Dependency injection** via FastAPI `Depends()` — fully testable
+- **Rate limiting**, **API key auth**, **CORS**, **request ID** middleware
+- **Multi-stage Docker** build with health checks
+- **docker-compose** with MLflow server
+- **GitHub Actions CI** — lint, test, Docker build verification
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture
 
 ```
-Client (Swagger / API)
-        |
-        v
-FastAPI (/generate)
-        |
-        v
-LLM Client (Local Hugging Face Model)
-        |
-        v
-Raw LLM Output
-        |
-        v
+Client Request
+      |
+      v
+Middleware Stack (Request ID → Logging → Rate Limit → API Key → CORS)
+      |
+      v
+FastAPI Router (/api/v1/generate)
+      |
+      v
+LLM Client (HuggingFace Transformers)
+      |
+      v
 Evaluation Pipeline
-   ├── Relevance Scoring (Embeddings)
-   ├── Hallucination Detection (Heuristics)
-        |
-        v
-EvaluationResult
-        |
-        v
-MLflow Tracking (Metrics + Artifacts)
+  ├── RelevanceScorer (sentence-transformers)
+  ├── HallucinationDetector (multi-signal heuristics)
+  └── ToxicityDetector (pattern-based scoring)
+      |
+      v
+EvaluationResult (relevance, hallucination, toxicity, confidence)
+      |
+      ├──> MLflow Tracking (params, metrics, artifacts)
+      ├──> Prometheus Metrics (counters, gauges)
+      ├──> SQLite Database (full history)
+      |
+      v
+JSON Response with evaluation metadata
 ```
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
-llm-monitoring-evaluation-pipeline/
-│
 ├── app/
+│   ├── main.py                    # Application entrypoint with lifespan
 │   ├── api/
-│   │   └── routes.py            # FastAPI endpoints
+│   │   ├── routes.py              # API endpoints (generate, batch, history, analytics)
+│   │   └── middleware.py          # Request ID, logging, rate limit, API key
 │   ├── core/
-│   │   ├── config.py            # Configuration handling
-│   │   └── logging.py           # Logging setup
-│   ├── llm/
-│   │   └── client.py            # LLM backend abstraction
-│   ├── schemas/
-│   │   ├── request.py           # Request schemas
-│   │   └── response.py          # Response schemas
+│   │   ├── config.py              # Pydantic settings (all configurable via env)
+│   │   ├── logging.py             # Structured logging with JSON + rotation
+│   │   └── dependencies.py        # FastAPI dependency injection
+│   ├── db/
+│   │   ├── database.py            # SQLAlchemy engine and session
+│   │   └── models.py              # LLMRequest model
 │   ├── evaluation/
-│   │   ├── evaluator.py         # Evaluation orchestrator
-│   │   ├── relevance.py         # Relevance scoring
-│   │   ├── hallucination.py     # Hallucination detection
-│   │   └── result.py            # Evaluation result schema
+│   │   ├── evaluator.py           # Evaluation orchestrator
+│   │   ├── relevance.py           # Embedding-based relevance scoring
+│   │   ├── hallucination.py       # Multi-signal hallucination detection
+│   │   ├── toxicity.py            # Toxicity scoring
+│   │   └── result.py              # EvaluationResult schema
+│   ├── llm/
+│   │   ├── base.py                # Abstract LLM client interface
+│   │   └── client.py              # HuggingFace local client
 │   ├── monitoring/
-│   │   └── mlflow_tracker.py    # MLflow logging
-│   └── main.py                  # Application entrypoint
-│
-├── mlruns/                       # MLflow runs (local)
+│   │   ├── mlflow_tracker.py      # MLflow experiment tracking
+│   │   └── metrics.py             # Prometheus metrics collector
+│   └── schemas/
+│       ├── request.py             # Request validation schemas
+│       └── response.py            # Response schemas
 ├── tests/
-├── requirements.txt
-├── README.md
-└── .env.example
+│   ├── conftest.py                # Fixtures with dependency overrides
+│   ├── test_api.py                # API endpoint tests
+│   ├── test_evaluation.py         # Evaluation pipeline tests
+│   ├── test_llm_client.py         # LLM client tests
+│   └── test_monitoring.py         # Metrics collector tests
+├── .github/workflows/ci.yml      # CI pipeline (lint → test → Docker)
+├── Dockerfile                     # Multi-stage production build
+├── docker-compose.yml             # App + MLflow server
+├── pyproject.toml                 # Project config, pytest, ruff
+├── requirements.txt               # Pinned dependencies
+└── .env.example                   # All configuration variables
 ```
 
 ---
 
-## 🤖 LLM Used
+## API Endpoints
 
-* **Model:** `distilgpt2`
-* **Framework:** Hugging Face `transformers`
-* **Inference:** Local CPU (no API keys, no paid services)
+### System
 
-### Why `distilgpt2`?
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check with version info |
+| GET | `/metrics` | Prometheus-compatible metrics |
+| GET | `/docs` | Swagger UI |
+| GET | `/redoc` | ReDoc documentation |
 
-* Small and fast
-* Not instruction-tuned
-* High hallucination tendency
+### LLM Operations (`/api/v1/`)
 
-This makes it **ideal for testing monitoring and evaluation logic**, rather than hiding failures with a strong model.
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/generate` | Generate + evaluate single prompt |
+| POST | `/generate/batch` | Batch generate (up to 10 prompts) |
+| GET | `/history` | Paginated request history with filters |
+| GET | `/analytics` | Aggregated quality metrics |
 
----
+### Example Request
 
-## 📊 Evaluation Metrics
-
-### 1️⃣ Relevance Score
-
-* Computed using sentence embeddings
-* Cosine similarity between prompt and generated output
-* Range: `[0, 1]`
-* Lower score indicates semantic drift or irrelevance
-
-### 2️⃣ Hallucination Detection
-
-Heuristic-based detection including:
-
-* Prompt echoing
-* Low relevance score
-* Suspicious metadata hallucinations (e.g., fabricated articles, dates)
-
-### 3️⃣ Schema Validity
-
-* Ensures responses remain structurally valid and API-safe
-
----
-
-## 📈 MLflow Experiment Tracking
-
-Each `/generate` request logs:
-
-* **Parameters**
-
-  * Prompt
-  * Model name
-* **Metrics**
-
-  * Relevance score
-  * Hallucination flag
-* **Artifacts**
-
-  * Raw LLM output
-
-This enables:
-
-* Prompt regression testing
-* Model comparison
-* Drift and failure trend analysis
-
----
-
-## 🔌 API Endpoints
-
-### Health Check
-
-```
-GET /health
+```bash
+curl -X POST http://localhost:8000/api/v1/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Explain LLM hallucination in one sentence."}'
 ```
 
-### Generate & Evaluate
-
-```
-POST /generate
-```
-
-#### Request
+### Example Response
 
 ```json
 {
-  "prompt": "Explain LLM hallucination in one sentence."
-}
-```
-
-#### Response
-
-```json
-{
+  "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "prompt": "Explain LLM hallucination in one sentence.",
   "raw_output": "...",
+  "model_name": "distilgpt2",
   "evaluation": {
-    "schema_valid": true,
     "relevance_score": 0.61,
     "hallucination_flag": true,
+    "toxicity_score": 0.0,
+    "confidence_score": 0.505,
+    "hallucination_reasons": ["Low relevance score (0.210 < 0.3)"],
     "notes": "auto-evaluated"
-  }
+  },
+  "latency_ms": 245.32,
+  "token_count": 42
 }
 ```
 
-Swagger UI is available at:
-
-```
-/docs
-```
-
 ---
 
-## ▶️ Running the Project
+## Running the Project
 
-### 1️⃣ Create and activate virtual environment
+### Local Development
 
 ```bash
+# Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate
-```
 
-### 2️⃣ Install dependencies
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Copy environment config
+cp .env.example .env
+
+# Start the server
+uvicorn app.main:app --reload
+
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=app --cov-report=html
 ```
 
-### 3️⃣ Start FastAPI server
+### Docker
 
 ```bash
-python -m uvicorn app.main:app --reload
-```
+# Build and start all services
+docker compose up --build
 
-### 4️⃣ Start MLflow UI
-
-```bash
-mlflow ui --backend-store-uri ./mlruns
+# App:    http://localhost:8000
+# MLflow: http://localhost:5000
+# Docs:   http://localhost:8000/docs
 ```
 
 ---
 
-## 🔁 Model & Prompt Regression Testing
+## Configuration
 
-Because the LLM client is abstracted:
+All settings are configurable via environment variables (see `.env.example`):
 
-* Models can be swapped with minimal changes
-* The same prompts can be re-evaluated
-* MLflow metrics enable detection of quality regressions
-
-This mirrors **real-world LLM validation workflows**.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENV` | `dev` | Environment (dev/prod) |
+| `API_KEY` | None | API key for auth (disabled if unset) |
+| `RATE_LIMIT_PER_MINUTE` | 60 | Max requests per IP per minute |
+| `LLM_MODEL_NAME` | `distilgpt2` | HuggingFace model name |
+| `LLM_MAX_LENGTH` | 150 | Max generation length |
+| `LLM_TEMPERATURE` | 1.0 | Sampling temperature |
+| `LLM_DEVICE` | -1 | Device (-1=CPU, 0+=GPU) |
+| `HALLUCINATION_RELEVANCE_THRESHOLD` | 0.3 | Relevance threshold for hallucination |
+| `DATABASE_URL` | `sqlite:///./llm_monitor.db` | Database connection string |
+| `MLFLOW_TRACKING_URI` | `file:./mlruns` | MLflow tracking URI |
 
 ---
 
-## 📌 Future Enhancements
+## Evaluation Metrics
 
-* JSON-only LLM outputs with strict schema enforcement
-* LLM-as-a-judge hallucination scoring
-* Drift alerts and dashboards
-* Dockerized deployment
-* CI-based evaluation regression tests
+### Relevance Score (0.0 - 1.0)
+Cosine similarity between prompt and output embeddings using `all-MiniLM-L6-v2`. Lower scores indicate semantic drift.
 
+### Hallucination Detection
+Multi-signal heuristic engine:
+- **Prompt echoing** — output trivially repeats the input
+- **Low relevance** — output semantically diverges from prompt
+- **Excessive repetition** — low unique word ratio
+- **Suspicious patterns** — fabricated URLs, dates, attributions
+- **Incoherent structure** — excessively long sentences without punctuation
 
+### Toxicity Score (0.0 - 1.0)
+Pattern-based analysis with severity-weighted scoring across multiple toxicity categories.
+
+### Confidence Score (0.0 - 1.0)
+Weighted composite: `relevance * 0.5 + no_hallucination * 0.3 + (1 - toxicity) * 0.2`
+
+---
+
+## Why distilgpt2?
+
+This project intentionally uses a weak, non-instruction-tuned model. It **frequently hallucinates**, making it ideal for stress-testing the monitoring and evaluation pipeline. The goal is to detect and measure failures — not hide them behind a strong model.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API | FastAPI, Pydantic v2, Uvicorn |
+| LLM | HuggingFace Transformers |
+| Embeddings | sentence-transformers (MiniLM) |
+| Evaluation | Custom multi-signal pipeline |
+| Tracking | MLflow |
+| Metrics | Prometheus-compatible |
+| Database | SQLAlchemy + SQLite |
+| Logging | Loguru (structured JSON) |
+| Testing | pytest with dependency injection |
+| CI/CD | GitHub Actions |
+| Container | Docker (multi-stage) |
